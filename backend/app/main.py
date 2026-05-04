@@ -26,20 +26,12 @@ def _remaining_budget_seconds(started_at: float, settings: Settings) -> float:
     return settings.total_request_budget_seconds - elapsed
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
-    return HealthResponse(
-        status="ok",
-        model_configured=bool(settings.openrouter_api_key),
-    )
-
-
-@app.post("/analyze/resume", response_model=ResumeAnalysisResult)
-async def analyze_resume(
-    resume: UploadFile = File(...),
-    settings: Settings = Depends(get_settings),
+async def _analyze_resume_impl(
+    *,
+    resume: UploadFile,
+    settings: Settings,
+    total_started_at: float,
 ) -> ResumeAnalysisResult:
-    total_started_at = time.perf_counter()
     read_started_at = time.perf_counter()
     resume_bytes = await _read_upload(resume)
     upload_read_ms = int((time.perf_counter() - read_started_at) * 1000)
@@ -76,14 +68,14 @@ async def analyze_resume(
     return result
 
 
-@app.post("/analyze/match", response_model=ResumeMatchResult)
-async def analyze_match(
-    resume: UploadFile = File(...),
-    jd_text: Annotated[str | None, Form()] = None,
-    jd_file: UploadFile | None = File(default=None),
-    settings: Settings = Depends(get_settings),
+async def _analyze_match_impl(
+    *,
+    resume: UploadFile,
+    jd_text: str | None,
+    jd_file: UploadFile | None,
+    settings: Settings,
+    total_started_at: float,
 ) -> ResumeMatchResult:
-    total_started_at = time.perf_counter()
     read_started_at = time.perf_counter()
     upload_reads = [_read_upload(resume)]
     if jd_file is not None:
@@ -157,3 +149,59 @@ async def analyze_match(
         path="llm",
     )
     return result
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        model_configured=bool(settings.openrouter_api_key),
+    )
+
+
+@app.post("/analyze/resume", response_model=ResumeAnalysisResult)
+async def analyze_resume(
+    resume: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+) -> ResumeAnalysisResult:
+    total_started_at = time.perf_counter()
+    try:
+        return await asyncio.wait_for(
+            _analyze_resume_impl(
+                resume=resume,
+                settings=settings,
+                total_started_at=total_started_at,
+            ),
+            timeout=settings.total_request_budget_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Resume analysis took too long. Please try a smaller PDF/DOCX or rerun with a shorter file.",
+        ) from exc
+
+
+@app.post("/analyze/match", response_model=ResumeMatchResult)
+async def analyze_match(
+    resume: UploadFile = File(...),
+    jd_text: Annotated[str | None, Form()] = None,
+    jd_file: UploadFile | None = File(default=None),
+    settings: Settings = Depends(get_settings),
+) -> ResumeMatchResult:
+    total_started_at = time.perf_counter()
+    try:
+        return await asyncio.wait_for(
+            _analyze_match_impl(
+                resume=resume,
+                jd_text=jd_text,
+                jd_file=jd_file,
+                settings=settings,
+                total_started_at=total_started_at,
+            ),
+            timeout=settings.total_request_budget_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Resume match analysis took too long. Please try a smaller resume or JD file.",
+        ) from exc

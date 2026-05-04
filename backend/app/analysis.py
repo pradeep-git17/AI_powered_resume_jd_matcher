@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .match_utils import clamp_score, classify_fit, dedupe_preserve_order
-from .schemas import EducationItem, ExperienceItem, ResumeAnalysisResult, ResumeMatchResult
+from .schemas import EducationItem, ExperienceItem, ProjectItem, ResumeAnalysisResult, ResumeMatchResult
 
 
 def _normalize_education(items: list[dict[str, Any]] | None) -> list[EducationItem]:
@@ -48,12 +48,36 @@ def _normalize_experience(items: list[dict[str, Any]] | None) -> list[Experience
     return results
 
 
+def _normalize_projects(items: list[dict[str, Any]] | None) -> list[ProjectItem]:
+    results: list[ProjectItem] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    for item in items or []:
+        if isinstance(item, dict):
+            title = str(item.get("title", "")).strip()
+            description = str(item.get("description", "")).strip()
+            technologies = str(item.get("technologies", "")).strip()
+        else:
+            title = str(item).strip()
+            description = ""
+            technologies = ""
+        key = (title.casefold(), description.casefold(), technologies.casefold())
+        if key in seen or not any(key):
+            continue
+        seen.add(key)
+        results.append(ProjectItem(title=title, description=description, technologies=technologies))
+
+    return results
+
+
 def build_resume_analysis(payload: dict[str, Any]) -> ResumeAnalysisResult:
     return ResumeAnalysisResult(
         summary=str(payload.get("summary", "")).strip(),
         skills=dedupe_preserve_order(payload.get("skills", [])),
         education=_normalize_education(payload.get("education")),
         experience=_normalize_experience(payload.get("experience")),
+        projects=_normalize_projects(payload.get("projects")),
+        suitable_fields=dedupe_preserve_order(payload.get("suitable_fields", [])),
         warnings=dedupe_preserve_order(payload.get("warnings", [])),
     )
 
@@ -67,6 +91,8 @@ def build_resume_match(payload: dict[str, Any], moderate_threshold: int, good_th
         skills=dedupe_preserve_order(payload.get("skills", [])),
         education=_normalize_education(payload.get("education")),
         experience=_normalize_experience(payload.get("experience")),
+        projects=_normalize_projects(payload.get("projects")),
+        suitable_fields=dedupe_preserve_order(payload.get("suitable_fields", [])),
         warnings=dedupe_preserve_order(payload.get("warnings", [])),
         jd_skills=dedupe_preserve_order(payload.get("jd_skills", [])),
         matching_skills=dedupe_preserve_order(payload.get("matching_skills", [])),

@@ -17,6 +17,12 @@ class ExperienceItem(BaseModel):
     highlights: str = ""
 
 
+class ProjectItem(BaseModel):
+    title: str = ""
+    description: str = ""
+    technologies: str = ""
+
+
 class TimingBreakdown(BaseModel):
     total_ms: int = 0
     upload_read_ms: int = 0
@@ -31,6 +37,8 @@ class ResumeAnalysisResult(BaseModel):
     skills: list[str] = Field(default_factory=list)
     education: list[EducationItem] = Field(default_factory=list)
     experience: list[ExperienceItem] = Field(default_factory=list)
+    projects: list[ProjectItem] = Field(default_factory=list)
+    suitable_fields: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     timing: TimingBreakdown = Field(default_factory=TimingBreakdown)
 
