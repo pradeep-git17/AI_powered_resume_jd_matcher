@@ -10,7 +10,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Resume Analyzer", page_icon=":page_facing_up:", layout="wide")
 
-DEFAULT_API_BASE_URL = "http://localhost:8000"
+DEFAULT_API_BASE_URL = "https://ai-resume-jd-matcher-xmz7.onrender.com"
 REQUEST_TIMEOUT_SECONDS = 240
 
 
